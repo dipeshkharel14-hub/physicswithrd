@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Physics with RD — Rabin Dhaurali</title>
+<style>
+  :root{
+    --bg:#02040c;
+    --bg2:#060a18;
+    --surface:rgba(255,255,255,0.03);
+    --border:rgba(255,255,255,0.07);
+    --blue:#00d4ff;
+    --gold:#ffd700;
+    --text:#e2e8f0;
+    --muted:#64748b;
+    --dim:#334155;
+    --sidebar:240px;
+    --nav:60px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden}
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px}
+
+  /* ── PARTICLES ── */
+  #canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+  /* ── INTRO ── */
+  #intro{
+    position:fixed;inset:0;z-index:1000;background:var(--bg);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;
+    transition:opacity 0.9s ease;
+  }
+  #intro.hide{opacity:0;pointer-events:none}
+  .intro-name{
+    font-family:Georgia,serif;font-size:clamp(2.2rem,6vw,4.2rem);font-weight:400;
+    letter-spacing:.08em;
+    background:linear-gradient(135deg,#00d4ff 0%,#fff 50%,#ffd700 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    opacity:0;transform:translateY(30px);filter:blur(16px);
+    transition:all 1s cubic-bezier(.16,1,.3,1);
+  }
+  .intro-name.show{opacity:1;transform:translateY(0);filter:blur(0)}
+  .intro-tag{
+    font-family:monospace;font-size:.9rem;letter-spacing:.45em;color:var(--blue);
+    text-transform:uppercase;opacity:0;transform:translateY(10px);
+    transition:all .8s ease .15s;
+  }
+  .intro-tag.show{opacity:1;transform:translateY(0)}
+  .intro-dots{display:flex;gap:8px;opacity:0;transition:opacity .6s ease .4s}
+  .intro-dots.show{opacity:1}
+  .intro-dots span{
+    width:7px;height:7px;border-radius:50%;background:var(--blue);
+    animation:pulse 1.2s ease infinite;
+  }
+  .intro-dots span:nth-child(2){animation-delay:.2s}
+  .intro-dots span:nth-child(3){animation-delay:.4s}
+
+  /* ── NAV ── */
+  nav{
+    position:fixed;top:0;left:0;right:0;height:var(--nav);z-index:200;
+    background:rgba(2,4,12,.88);backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;padding:0 28px;
+  }
+  .nav-logo{display:flex;align-items:center;gap:12px;cursor:pointer;text-decoration:none}
+  .nav-atom{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(135deg,var(--blue),var(--gold));
+    display:flex;align-items:center;justify-content:center;font-size:18px;
+  }
+  .nav-title{font-family:Georgia,serif;font-size:1.05rem;color:var(--text);letter-spacing:.5px}
+  .nav-btns{display:flex;gap:8px}
+  .nav-btn{
+    background:none;border:1px solid var(--border);color:var(--muted);
+    padding:6px 18px;border-radius:8px;cursor:pointer;font-family:monospace;
+    font-size:.82rem;letter-spacing:1px;transition:all .2s;
+  }
+  .nav-btn:hover,.nav-btn.active{border-color:var(--blue);color:var(--blue);background:rgba(0,212,255,.1)}
+  .nav-btn.g12.active{border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.1)}
+
+  /* ── LAYOUT ── */
+  #app{display:none;position:relative;z-index:1;min-height:100vh;padding-top:var(--nav)}
+  #app.visible{display:block}
+
+  /* ── SCREENS ── */
+  .screen{display:none;animation:fadeUp .45s ease both}
+  .screen.active{display:block}
+
+  /* ── HOME ── */
+  #home{max-width:960px;margin:0 auto;padding:60px 24px}
+  .hero{text-align:center;margin-bottom:72px}
+  .hero-eyebrow{font-family:monospace;font-size:.78rem;letter-spacing:4px;color:var(--blue);text-transform:uppercase;margin-bottom:18px;opacity:.85}
+  .hero-h1{
+    font-family:Georgia,serif;font-weight:400;
+    font-size:clamp(2rem,5vw,3.6rem);letter-spacing:.02em;line-height:1.15;
+    background:linear-gradient(135deg,#f1f5f9 0%,var(--blue) 60%,var(--gold) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:14px;
+  }
+  .hero-sub{color:var(--muted);font-family:monospace;font-size:.88rem;letter-spacing:.5px;line-height:1.8;max-width:460px;margin:0 auto 36px}
+  .hero-sub span{color:var(--blue)}
+  .formula-bar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+  .formula-pill{
+    font-family:monospace;font-size:.76rem;
+    background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.15);
+    padding:5px 14px;border-radius:20px;color:rgba(0,212,255,.75);letter-spacing:.3px;
+  }
+  .section-label{text-align:center;font-family:monospace;font-size:.76rem;letter-spacing:3px;color:var(--dim);text-transform:uppercase;margin-bottom:28px}
+  .grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:26px;margin-bottom:68px}
+  .grade-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:18px;
+    padding:34px 30px;cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1);
+    position:relative;overflow:hidden;
+  }
+  .grade-card:hover{transform:translateY(-5px);box-shadow:0 20px 60px rgba(0,212,255,.15)}
+  .grade-card.gold:hover{box-shadow:0 20px 60px rgba(255,215,0,.12)}
+  .grade-card-bg{
+    position:absolute;top:-20px;right:-20px;width:110px;height:110px;
+    border-radius:50%;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.12);
+  }
+  .grade-card.gold .grade-card-bg{background:rgba(255,215,0,.05);border-color:rgba(255,215,0,.12)}
+  .grade-eyebrow{font-family:monospace;font-size:.74rem;letter-spacing:3px;color:var(--blue);text-transform:uppercase;margin-bottom:10px}
+  .grade-card.gold .grade-eyebrow{color:var(--gold)}
+  .grade-title{font-family:Georgia,serif;font-size:2rem;color:var(--text);font-weight:400;margin-bottom:8px}
+  .grade-desc{color:var(--muted);font-size:.84rem;line-height:1.65;margin-bottom:22px}
+  .chapter-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:26px}
+  .chapter-tag{
+    background:rgba(0,212,255,.09);color:var(--blue);
+    font-size:.7rem;padding:4px 10px;border-radius:20px;font-family:monospace;
+  }
+  .grade-card.gold .chapter-tag{background:rgba(255,215,0,.09);color:var(--gold)}
+  .grade-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:18px}
+  .grade-problems{color:var(--dim);font-size:.78rem;font-family:monospace}
+  .grade-enter{color:var(--blue);font-family:monospace;font-size:.84rem;letter-spacing:1px;transition:transform .2s}
+  .grade-card.gold .grade-enter{color:var(--gold)}
+  .grade-card:hover .grade-enter{transform:translateX(5px)}
+  .stats-bar{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .stat-box{padding:28px 20px;text-align:center;background:rgba(2,6,18,.6);border-right:1px solid var(--border)}
+  .stat-box:last-child{border-right:none}
+  .stat-num{font-family:Georgia,serif;font-size:2rem;color:var(--text);margin-bottom:5px}
+  .stat-label{font-family:monospace;font-size:.72rem;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+
+  /* ── GRADE HUB ── */
+  #grade-hub{display:none;flex-direction:row;min-height:calc(100vh - var(--nav))}
+  #grade-hub.active{display:flex}
+
+  /* Sidebar */
+  .sidebar{
+    width:var(--sidebar);flex-shrink:0;
+    background:rgba(2,4,12,.95);border-right:1px solid var(--border);
+    position:sticky;top:var(--nav);height:calc(100vh - var(--nav));
+    overflow-y:auto;transition:width .3s ease;overflow-x:hidden;
+  }
+  .sidebar.collapsed{width:0}
+  .sidebar-inner{padding:24px 14px;min-width:226px}
+  .sidebar-grade{font-family:monospace;font-size:.72rem;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:20px;padding-left:4px}
+  .sidebar-item{
+    width:100%;text-align:left;background:none;border:none;border-left:2px solid transparent;
+    padding:10px 12px;cursor:pointer;border-radius:0 8px 8px 0;
+    color:var(--muted);font-size:.81rem;font-family:monospace;letter-spacing:.3px;
+    transition:all .2s;margin-bottom:3px;display:block;white-space:nowrap;
+  }
+  .sidebar-item:hover{color:var(--text);background:rgba(255,255,255,.04)}
+  .sidebar-item.active{color:var(--blue);border-left-color:var(--blue);background:rgba(0,212,255,.09)}
+  .sidebar-item.gold-active{color:var(--gold);border-left-color:var(--gold);background:rgba(255,215,0,.09)}
+
+  /* Main content area */
+  .main-area{flex:1;overflow-x:hidden;overflow-y:auto}
+
+  /* Chapter list */
+  #chapter-list{max-width:860px;margin:0 auto;padding:48px 32px;animation:fadeUp .4s ease}
+  .hub-back{
+    background:none;border:1px solid rgba(0,212,255,.5);color:var(--blue);
+    padding:8px 20px;border-radius:8px;cursor:pointer;font-family:monospace;
+    font-size:.83rem;letter-spacing:1px;margin-bottom:36px;transition:all .2s;display:inline-block;
+  }
+  .hub-back:hover{background:rgba(0,212,255,.12)}
+  .hub-back.gold{border-color:rgba(255,215,0,.5);color:var(--gold)}
+  .hub-back.gold:hover{background:rgba(255,215,0,.1)}
+  .hub-title{font-family:Georgia,serif;font-size:2.2rem;color:var(--text);font-weight:400;margin-bottom:6px}
+  .hub-sub{color:var(--blue);font-family:monospace;font-size:.82rem;letter-spacing:2px;margin-bottom:8px}
+  .hub-hint{color:var(--dim);font-family:monospace;font-size:.8rem;margin-bottom:40px}
+  .chapters-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
+  .chapter-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:13px;
+    padding:22px;cursor:pointer;transition:all .25s;
+    animation:fadeUp .4s ease both;
+  }
+  .chapter-card:hover{transform:translateY(-3px);border-color:rgba(0,212,255,.45);box-shadow:0 8px 30px rgba(0,212,255,.12)}
+  .chapter-card.gold:hover{border-color:rgba(255,215,0,.45);box-shadow:0 8px 30px rgba(255,215,0,.1)}
+  .ch-icon{font-size:28px;margin-bottom:10px}
+  .ch-title{font-family:Georgia,serif;font-size:1.02rem;color:var(--text);margin-bottom:5px}
+  .ch-sub{color:var(--muted);font-size:.76rem;line-height:1.55;margin-bottom:14px}
+  .ch-badges{display:flex;gap:6px}
+  .ch-badge{font-size:.68rem;padding:3px 9px;border-radius:20px;font-family:monospace}
+  .ch-badge.blue{background:rgba(0,212,255,.1);color:var(--blue)}
+  .ch-badge.gold{background:rgba(255,215,0,.1);color:var(--gold)}
+  .ch-badge.dim{background:rgba(255,255,255,.04);color:var(--muted)}
+
+  /* Chapter detail */
+  #chapter-detail{display:none;animation:fadeUp .4s ease}
+  #chapter-detail.active{display:flex;flex-direction:row;min-height:calc(100vh - var(--nav))}
+
+  .detail-main{flex:1;padding:40px 44px;overflow-x:hidden;max-width:100%}
+  .detail-right{
+    width:220px;flex-shrink:0;
+    background:rgba(2,4,12,.9);border-left:1px solid var(--border);
+    position:sticky;top:var(--nav);height:calc(100vh - var(--nav));
+    overflow-y:auto;
+  }
+  .right-inner{padding:22px 14px}
+  .right-label{font-family:monospace;font-size:.68rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);margin-bottom:16px;padding-left:4px}
+  .right-link{
+    display:block;width:100%;text-align:left;background:none;border:none;
+    border-left:2px solid transparent;padding:8px 10px;cursor:pointer;
+    color:var(--dim);font-size:.78rem;font-family:monospace;letter-spacing:.3px;
+    transition:all .2s;margin-bottom:2px;border-radius:0 6px 6px 0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .right-link:hover{color:var(--text);background:rgba(255,255,255,.03)}
+  .right-link.active{color:var(--blue);border-left-color:var(--blue);background:rgba(0,212,255,.07)}
+
+  .detail-back{
+    background:none;border:1px solid rgba(0,212,255,.5);color:var(--blue);
+    padding:8px 20px;border-radius:8px;cursor:pointer;font-family:monospace;
+    font-size:.82rem;letter-spacing:1px;margin-bottom:28px;transition:all .2s;
+  }
+  .detail-back:hover{background:rgba(0,212,255,.1)}
+  .ch-header{display:flex;align-items:center;gap:16px;margin-bottom:8px}
+  .ch-icon-lg{font-size:34px}
+  .ch-name{font-family:Georgia,serif;font-size:1.65rem;color:var(--text)}
+  .ch-subtitle{color:var(--blue);font-family:monospace;font-size:.8rem;letter-spacing:1px;margin-top:3px}
+
+  /* Tabs */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:26px 0 24px}
+  .tab{
+    background:none;border:none;padding:10px 24px;cursor:pointer;
+    font-family:monospace;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;
+    color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;
+  }
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+  /* Notes */
+  .note-card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:12px;padding:22px 26px;border-left:3px solid var(--blue);
+    margin-bottom:18px;
+  }
+  .note-card.gold{border-left-color:var(--gold)}
+  .note-heading{font-family:Georgia,serif;font-size:1.03rem;color:var(--text);margin-bottom:10px}
+  .note-body{color:var(--muted);line-height:1.82;font-size:.9rem}
+  .note-body strong{color:#e2e8f0}
+  .formula{
+    display:inline-block;font-family:'Courier New',monospace;
+    background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);
+    border-radius:4px;padding:2px 10px;font-size:.86em;color:#7ee8ff;letter-spacing:.3px;
+  }
+
+  /* Diagrams */
+  .diagram-note{
+    background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);
+    border-radius:9px;padding:12px 18px;margin-bottom:16px;
+    color:var(--muted);font-size:.8rem;font-family:monospace;
+  }
+  .diagram-card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:12px;padding:20px;display:flex;gap:16px;
+    align-items:flex-start;margin-bottom:14px;
+  }
+  .diagram-icon{
+    width:58px;height:58px;border-radius:10px;
+    background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;flex-shrink:0;
+  }
+  .diagram-label{color:var(--blue);font-weight:700;font-size:.84rem;font-family:monospace;letter-spacing:.8px;margin-bottom:6px}
+  .diagram-desc{color:var(--muted);font-size:.83rem;line-height:1.6}
+
+  /* Problems */
+  .problem-card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:12px;padding:18px 22px;margin-bottom:12px;
+    border-left:3px solid rgba(0,212,255,.4);
+  }
+  .problem-card.gold{border-left-color:rgba(255,215,0,.4)}
+  .problem-inner{display:flex;gap:14px}
+  .problem-num{
+    width:28px;height:28px;border-radius:50%;
+    background:rgba(0,212,255,.15);border:1px solid rgba(0,212,255,.4);
+    display:flex;align-items:center;justify-content:center;
+    font-size:.72rem;color:var(--blue);font-family:monospace;font-weight:700;flex-shrink:0;margin-top:2px;
+  }
+  .problem-num.gold{background:rgba(255,215,0,.15);border-color:rgba(255,215,0,.4);color:var(--gold)}
+  .problem-q{color:#cbd5e1;line-height:1.72;font-size:.9rem;margin-bottom:14px}
+  .reveal-btn{
+    background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.35);
+    color:var(--blue);padding:7px 18px;border-radius:8px;cursor:pointer;
+    font-family:monospace;font-size:.8rem;letter-spacing:.3px;transition:all .2s;
+  }
+  .reveal-btn:hover{background:rgba(0,212,255,.25)}
+  .reveal-btn.gold{background:rgba(255,215,0,.1);border-color:rgba(255,215,0,.35);color:var(--gold)}
+  .reveal-btn.gold:hover{background:rgba(255,215,0,.2)}
+  .answer{
+    background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.25);
+    border-radius:8px;padding:10px 16px;
+    color:var(--blue);font-family:monospace;font-size:.86rem;margin-top:10px;
+    animation:fadeUp .3s ease;
+  }
+  .answer.gold{background:rgba(255,215,0,.08);border-color:rgba(255,215,0,.25);color:var(--gold)}
+
+  /* Footer */
+  footer{
+    border-top:1px solid var(--border);padding:28px;text-align:center;
+    font-family:monospace;font-size:.75rem;color:var(--dim);letter-spacing:1px;
+    position:relative;z-index:1;
+  }
+
+  /* Sidebar toggle */
+  .toggle-btn{
+    background:none;border:1px solid var(--border);color:var(--muted);
+    padding:4px 10px;border-radius:6px;cursor:pointer;font-size:.72rem;
+    font-family:monospace;margin-bottom:18px;transition:all .2s;
+  }
+  .toggle-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+
+  @media(max-width:640px){
+    .detail-right{display:none}
+    .sidebar{position:fixed;top:var(--nav);left:0;z-index:150;height:calc(100vh - var(--nav))}
+    .detail-main{padding:24px 18px}
+    #chapter-list{padding:30px 18px}
+    #home{padding:40px 18px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- INTRO -->
+<div id="intro">
+  <div class="intro-name" id="iname">Rabin Dhaurali</div>
+  <div class="intro-tag" id="itag">Physics · Education · Excellence</div>
+  <div class="intro-dots" id="idots">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav id="nav" style="display:none">
+  <a class="nav-logo" onclick="goHome()">
+    <div class="nav-atom">⚛</div>
+    <span class="nav-title">Physics with RD</span>
+  </a>
+  <div class="nav-btns">
+    <button class="nav-btn" id="nb11" onclick="openGrade(11)">Grade 11</button>
+    <button class="nav-btn g12" id="nb12" onclick="openGrade(12)">Grade 12</button>
+  </div>
+</nav>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- HOME -->
+  <div id="home" class="screen active">
+    <div class="hero">
+      <div class="hero-eyebrow">Welcome to</div>
+      <h1 class="hero-h1">Physics with RD</h1>
+      <p class="hero-sub">
+        Conceptual clarity · Mathematical precision · Exam excellence<br>
+        by <span>Rabin Dhaurali</span>
+      </p>
+      <div class="formula-bar">
+        <span class="formula-pill">F = kq₁q₂/r²</span>
+        <span class="formula-pill">E = mc²</span>
+        <span class="formula-pill">ΔV = −∫E·dr</span>
+        <span class="formula-pill">∇×B = μ₀J</span>
+        <span class="formula-pill">ψ = Ae^(iωt)</span>
+      </div>
+    </div>
+    <div class="section-label">Choose Your Grade</div>
+    <div class="grade-grid">
+      <div class="grade-card" onclick="openGrade(11)">
+        <div class="grade-card-bg"></div>
+        <div class="grade-eyebrow">Foundation of Physics</div>
+        <div class="grade-title">Grade 11</div>
+        <p class="grade-desc">4 chapters · Conceptual notes, diagrams &amp; numerical practice</p>
+        <div class="chapter-tags" id="tags11"></div>
+        <div class="grade-footer">
+          <span class="grade-problems" id="prb11"></span>
+          <span class="grade-enter">Enter →</span>
+        </div>
+      </div>
+      <div class="grade-card gold" onclick="openGrade(12)">
+        <div class="grade-card-bg"></div>
+        <div class="grade-eyebrow" style="color:var(--gold)">Advanced Physics</div>
+        <div class="grade-title">Grade 12</div>
+        <p class="grade-desc">4 chapters · Conceptual notes, diagrams &amp; numerical practice</p>
+        <div class="chapter-tags" id="tags12"></div>
+        <div class="grade-footer">
+          <span class="grade-problems" id="prb12"></span>
+          <span class="grade-enter" style="color:var(--gold)">Enter →</span>
+        </div>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-box"><div class="stat-num" id="s-chapters">8+</div><div class="stat-label">Chapters</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-problems">40+</div><div class="stat-label">Practice Problems</div></div>
+      <div class="stat-box"><div class="stat-num">2</div><div class="stat-label">Grades</div></div>
+    </div>
+  </div>
+
+  <!-- GRADE HUB (chapter list) -->
+  <div id="grade-hub">
+    <div class="sidebar" id="hub-sidebar">
+      <div class="sidebar-inner">
+        <div class="sidebar-grade" id="sb-grade-label"></div>
+        <div id="sb-items"></div>
+      </div>
+    </div>
+    <div class="main-area">
+      <div id="chapter-list">
+        <button class="hub-back" id="hub-back-btn" onclick="goHome()">← Home</button>
+        <h2 class="hub-title" id="hub-title"></h2>
+        <div class="hub-sub" id="hub-sub"></div>
+        <div class="hub-hint" id="hub-hint"></div>
+        <div class="chapters-grid" id="chapters-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAPTER DETAIL -->
+  <div id="chapter-detail">
+    <div class="sidebar" id="det-sidebar">
+      <div class="sidebar-inner">
+        <div class="sidebar-grade" id="det-sb-label" style="color:var(--blue)">Quick Jump</div>
+        <div id="det-sb-items"></div>
+      </div>
+    </div>
+    <div class="main-area" id="det-main-area">
+      <div class="detail-main" id="detail-main">
+        <button class="toggle-btn" onclick="toggleDetSidebar()">⊞ Sidebar</button>
+        <button class="detail-back" id="det-back" onclick="backToChapters()">← Back to Chapters</button>
+        <div class="ch-header">
+          <div class="ch-icon-lg" id="det-icon"></div>
+          <div>
+            <div class="ch-name" id="det-name"></div>
+            <div class="ch-subtitle" id="det-sub"></div>
+          </div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('notes',this)">Notes</button>
+          <button class="tab" onclick="switchTab('diagrams',this)">Diagrams</button>
+          <button class="tab" onclick="switchTab('problems',this)">Problems</button>
+        </div>
+        <div id="tab-notes"></div>
+        <div id="tab-diagrams" style="display:none"></div>
+        <div id="tab-problems" style="display:none"></div>
+      </div>
+    </div>
+    <!-- RIGHT SCROLL PANEL -->
+    <div class="detail-right" id="det-right">
+      <div class="right-inner">
+        <div class="right-label">On This Page</div>
+        <div id="right-links"></div>
+        <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:18px">
+          <div class="right-label">All Chapters</div>
+          <div id="right-chapters"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>© 2024 Physics with RD · Rabin Dhaurali · All rights reserved</footer>
+</div>
+
+<script>
+// ─── DATA ─────────────────────────────────────────────────────────────────
+const DATA = {
+  11:{
+    label:"Grade 11", tag:"Foundation of Physics", color:"#00d4ff",
+    chapters:[
+      {
+        id:"electric-charge", title:"Electric Charge", icon:"⚡",
+        sub:"Coulomb's Law, Quantization & Induction",
+        notes:[
+          {h:"1. Nature of Electric Charge",
+           b:"Electric charge is a fundamental property of matter. There are two types: <strong>positive</strong> (protons) and <strong>negative</strong> (electrons). Like charges repel; unlike charges attract. Charge is conserved — the total charge in an isolated system remains constant."},
+          {h:"2. Coulomb's Law",
+           b:"The electrostatic force between two point charges is: <span class='formula'>F = k·q₁q₂ / r²</span> where <strong>k = 9 × 10⁹ N·m²/C²</strong>, q₁ and q₂ are charges, and r is separation. The force acts along the line joining the charges."},
+          {h:"3. Quantization of Charge",
+           b:"Charge exists only in discrete multiples of the elementary charge: <span class='formula'>q = ne</span>, n = 0, ±1, ±2, … where <strong>e = 1.6 × 10⁻¹⁹ C</strong>. Charge cannot take arbitrary values."},
+          {h:"4. Charging by Induction",
+           b:"When a charged object is brought near a conductor without contact: free electrons redistribute; the near side becomes oppositely charged; grounding removes excess charge; removing the ground then the charged object leaves a net charge opposite to the original."}
+        ],
+        diagrams:[
+          {label:"Coulomb Force Diagram",icon:"→←",desc:"Two point charges q₁ and q₂ separated by distance r, with force vectors F₁₂ and F₂₁ shown along the connecting line. Like charges show repulsion, unlike charges show attraction."},
+          {label:"Induction Process",icon:"〰",desc:"Step-by-step diagram: neutral conductor → charged rod nearby → electrons migrate → grounding → net charge after rod removed showing complete induction cycle."}
+        ],
+        problems:[
+          {q:"Two charges of +3 μC and −5 μC are placed 0.2 m apart in vacuum. Find the force between them.",a:"F = 3.375 N (attractive)"},
+          {q:"How many electrons must be removed from a neutral body to give it a charge of +1.6 μC?",a:"n = 10¹³ electrons"},
+          {q:"A charge of 8e is placed at the origin. What is the minimum charge detectable on any particle?",a:"e = 1.6 × 10⁻¹⁹ C"},
+          {q:"Three equal charges q are placed at the corners of an equilateral triangle of side a. Find the net force on each charge.",a:"F = √3 kq²/a² directed away from the centroid"},
+          {q:"The force between two charges is 20 N. If the distance is doubled, what is the new force?",a:"F′ = 5 N"}
+        ]
+      },
+      {
+        id:"electric-potential", title:"Electric Potential", icon:"🔋",
+        sub:"Work Done, Equipotential Surfaces & Potential Gradient",
+        notes:[
+          {h:"1. Electric Potential",
+           b:"The electric potential V at a point is the work done per unit positive charge in bringing a test charge from infinity to that point: <span class='formula'>V = W/q₀ = kQ/r</span>. Potential is a scalar quantity measured in <strong>Volts (V)</strong>."},
+          {h:"2. Work Done in Moving a Charge",
+           b:"The work done in moving charge q from point A to point B: <span class='formula'>W = q(V_A − V_B) = q·ΔV</span>. If V_A &gt; V_B, positive work is done by the electric field."},
+          {h:"3. Equipotential Surfaces",
+           b:"An equipotential surface is a locus of points having the same potential. <strong>No work</strong> is done moving a charge along an equipotential surface. Electric field lines are always <strong>perpendicular</strong> to equipotential surfaces. For a point charge: concentric spheres."},
+          {h:"4. Potential Gradient",
+           b:"The electric field is the negative gradient of the potential: <span class='formula'>E = −dV/dr</span>. SI unit: V/m (= N/C). The field points from high V to low V. A steeper gradient implies a stronger field."}
+        ],
+        diagrams:[
+          {label:"Equipotential & Field Lines",icon:"◎",desc:"Concentric circular equipotential surfaces around a point charge with radial field lines crossing them perpendicularly at every intersection point."},
+          {label:"Potential vs Distance Graph",icon:"📉",desc:"Graph of V = kQ/r showing hyperbolic decrease of potential with distance r from a positive point charge; V → ∞ as r → 0."}
+        ],
+        problems:[
+          {q:"Find the electric potential at a distance of 0.3 m from a charge of +2 μC.",a:"V = 6 × 10⁴ V"},
+          {q:"How much work is done in moving a charge of 5 μC from a point at 100 V to a point at 60 V?",a:"W = −2 × 10⁻⁴ J (field does +2×10⁻⁴ J)"},
+          {q:"The potential at a point 10 cm from a charge is 900 V. Find the charge.",a:"Q = 1 × 10⁻⁸ C = 10 nC"},
+          {q:"Two charges +4 μC and −4 μC are 20 cm apart. Find the potential at the midpoint.",a:"V = 0 V (potentials cancel)"},
+          {q:"The electric field between two parallel plates is 500 V/m and they are 4 mm apart. Find the potential difference.",a:"ΔV = 2 V"}
+        ]
+      },
+      {
+        id:"capacitance", title:"Capacitance", icon:"🧲",
+        sub:"Parallel Plate Capacitors, Energy Storage & Dielectrics",
+        notes:[
+          {h:"1. Capacitor and Capacitance",
+           b:"A capacitor stores electric charge. Capacitance: <span class='formula'>C = Q/V</span>. Unit: <strong>Farad (F)</strong>. 1 F = 1 C/V. Capacitance depends on geometry and medium, not on Q or V individually."},
+          {h:"2. Parallel Plate Capacitor",
+           b:"For plates of area A separated by distance d in vacuum: <span class='formula'>C = ε₀A/d</span>. where <strong>ε₀ = 8.85 × 10⁻¹² F/m</strong>. Increasing A or decreasing d increases capacitance."},
+          {h:"3. Energy Stored",
+           b:"Energy stored in a charged capacitor: <span class='formula'>U = ½CV² = Q²/2C = ½QV</span>. This energy is stored in the electric field between the plates. Energy density: u = ½ε₀E²."},
+          {h:"4. Dielectrics",
+           b:"Inserting a dielectric of constant K: <span class='formula'>C′ = KC = Kε₀A/d</span>. Dielectrics increase capacitance by reducing the effective electric field. <strong>K > 1</strong> always. Water K ≈ 80."},
+          {h:"5. Combination of Capacitors",
+           b:"<strong>Series</strong>: 1/C_eq = 1/C₁ + 1/C₂ + … (same charge, voltage divides). <strong>Parallel</strong>: C_eq = C₁ + C₂ + … (same voltage, charge adds)."}
+        ],
+        diagrams:[
+          {label:"Parallel Plate Capacitor",icon:"⊣⊢",desc:"Two conducting plates of area A separated by distance d with uniform electric field lines E between them and charges +Q and −Q on opposing surfaces."},
+          {label:"Series & Parallel Circuits",icon:"⚡",desc:"Circuit diagrams showing capacitors in series (one path, voltage divides) and parallel (multiple paths, charge adds) with equivalent capacitance formulae labeled."}
+        ],
+        problems:[
+          {q:"A parallel plate capacitor has plate area 0.01 m² and separation 1 mm. Find its capacitance.",a:"C = 88.5 pF"},
+          {q:"A capacitor of 10 μF is charged to 200 V. Find the energy stored.",a:"U = 0.2 J"},
+          {q:"Three capacitors 2μF, 3μF, and 6μF are connected in series. Find equivalent capacitance.",a:"C_eq = 1 μF"},
+          {q:"A dielectric of K = 5 is inserted. How does the energy change if charge is kept constant?",a:"Energy decreases by factor 5: U′ = U/5"},
+          {q:"Two capacitors 4 μF and 6 μF are in parallel across 100 V. Find total charge.",a:"Q_total = 1000 μC = 1 mC"}
+        ]
+      },
+      {
+        id:"nuclear-physics", title:"Nuclear Physics", icon:"☢️",
+        sub:"Radioactivity, Half-Life & Binding Energy",
+        notes:[
+          {h:"1. Nuclear Structure",
+           b:"The nucleus contains <strong>protons</strong> (Z) and <strong>neutrons</strong> (N). Mass number A = Z + N. Nuclides with same Z but different N are <strong>isotopes</strong>. Nuclear radius: R = R₀A^(1/3), R₀ ≈ 1.2 fm."},
+          {h:"2. Radioactive Decay",
+           b:"Unstable nuclei emit radiation spontaneously. <strong>α-decay</strong>: emits ₂⁴He → Z−2, A−4. <strong>β⁻-decay</strong>: emits electron → Z+1, A unchanged. <strong>γ-decay</strong>: emits photon → no Z or A change. Decay law: <span class='formula'>N(t) = N₀e^(−λt)</span>"},
+          {h:"3. Half-Life",
+           b:"Time for half the nuclei to decay: <span class='formula'>T½ = ln2/λ = 0.693/λ</span>. After n half-lives: N = N₀/2ⁿ. Examples: ²²⁶Ra T½ = 1600 yr; ¹⁴C T½ = 5730 yr (carbon dating)."},
+          {h:"4. Binding Energy",
+           b:"Mass defect Δm corresponds to binding energy: <span class='formula'>E_b = Δm·c²</span>. Binding energy per nucleon (B/A) peaks at iron-56 (~8.8 MeV/nucleon). Fission and fusion both release energy by moving toward this peak."}
+        ],
+        diagrams:[
+          {label:"Radioactive Decay Curve",icon:"📉",desc:"Exponential decay graph: N vs t showing N₀, N₀/2, N₀/4 at t = 0, T½, 2T½ with shaded areas between each half-life interval."},
+          {label:"Binding Energy per Nucleon",icon:"📊",desc:"Graph of B/A (MeV) vs mass number A. Rises steeply for light nuclei, peaks at Fe-56 (~8.8 MeV), gradually decreases for heavy nuclei like U-238."}
+        ],
+        problems:[
+          {q:"A radioactive element has a half-life of 10 days. What fraction remains after 30 days?",a:"1/8 of original (3 half-lives)"},
+          {q:"The decay constant of a substance is 0.01 s⁻¹. Find its half-life.",a:"T½ = 69.3 s"},
+          {q:"Calculate the binding energy of ⁴He if its mass defect is 0.03038 u.",a:"E_b = 28.3 MeV"},
+          {q:"A nucleus ²³⁸U emits an α-particle. Write the decay equation and identify the daughter nucleus.",a:"²³⁸U → ²³⁴Th + ⁴He"},
+          {q:"The activity of a sample is 6400 Bq initially. After 40 min it is 400 Bq. Find T½.",a:"T½ = 10 minutes"}
+        ]
+      }
+    ]
+  },
+  12:{
+    label:"Grade 12", tag:"Advanced Physics", color:"#ffd700",
+    chapters:[
+      {
+        id:"current-electricity", title:"Current Electricity", icon:"🔌",
+        sub:"Ohm's Law, Kirchhoff's Rules & Wheatstone Bridge",
+        notes:[
+          {h:"1. Electric Current & Ohm's Law",
+           b:"Current I = dQ/dt (Amperes). Ohm's Law: <span class='formula'>V = IR</span>. Resistance: <span class='formula'>R = ρL/A</span>, where ρ is resistivity, L is length, A is cross-section area."},
+          {h:"2. Kirchhoff's Laws",
+           b:"<strong>KCL (Junction Rule)</strong>: ΣI_in = ΣI_out (conservation of charge). <strong>KVL (Loop Rule)</strong>: ΣV = 0 around any closed loop (conservation of energy). Applies to any circuit."},
+          {h:"3. Wheatstone Bridge",
+           b:"Four resistors in a diamond arrangement. Balanced condition: <span class='formula'>P/Q = R/S</span>. When balanced, no current flows through the galvanometer. Used to find unknown resistances with high precision."},
+          {h:"4. Potentiometer",
+           b:"A long resistance wire to measure EMF without drawing current. Comparison of EMFs: <span class='formula'>E₁/E₂ = l₁/l₂</span> where l₁, l₂ are balancing lengths. More accurate than voltmeter."}
+        ],
+        diagrams:[
+          {label:"Wheatstone Bridge",icon:"◇",desc:"Diamond circuit with P, Q, R, S at four arms and galvanometer G in the bridge wire. Battery connected between top and bottom nodes."},
+          {label:"Potentiometer Setup",icon:"─",desc:"Long wire AB with driver cell, jockey J, and galvanometer G connected to source EMF via high resistance R."}
+        ],
+        problems:[
+          {q:"A wire of resistance 10 Ω is stretched to double its length. Find new resistance.",a:"R′ = 40 Ω"},
+          {q:"In a Wheatstone bridge P=100Ω, Q=200Ω, R=150Ω. Find S for balance.",a:"S = 300 Ω"},
+          {q:"A cell has EMF 2V and internal resistance 0.5Ω. Find terminal voltage when delivering 2A.",a:"V = 1 V"},
+          {q:"Using KVL, find current in a loop with 12V source, 2Ω and 4Ω resistors in series.",a:"I = 2 A"},
+          {q:"Three resistors 3Ω, 6Ω, 9Ω are in parallel. Find equivalent resistance.",a:"R_eq ≈ 1.64 Ω"}
+        ]
+      },
+      {
+        id:"magnetism", title:"Magnetism & Matter", icon:"🧲",
+        sub:"Biot-Savart Law, Ampere's Law & Magnetic Materials",
+        notes:[
+          {h:"1. Biot-Savart Law",
+           b:"Magnetic field due to a current element: <span class='formula'>dB = (μ₀/4π)·(I dl × r̂)/r²</span>. where <strong>μ₀ = 4π × 10⁻⁷ T·m/A</strong>. Moving charges create magnetic fields."},
+          {h:"2. Ampere's Circuital Law",
+           b:"Line integral of B around a closed loop: <span class='formula'>∮B·dl = μ₀I_enc</span>. Used to find B for symmetric distributions: solenoid, toroid, infinite wire."},
+          {h:"3. Magnetic Field of Solenoid",
+           b:"Inside a solenoid: <span class='formula'>B = μ₀nI</span> where n = turns per unit length. Field is uniform inside, negligible outside. Toroid: B = μ₀NI/2πr."},
+          {h:"4. Magnetic Materials",
+           b:"<strong>Diamagnetic</strong>: weakly repelled (χ &lt; 0): Bismuth, Copper. <strong>Paramagnetic</strong>: weakly attracted (χ &gt; 0): Aluminium. <strong>Ferromagnetic</strong>: strongly attracted (χ &gg; 1): Iron, Nickel, Cobalt."}
+        ],
+        diagrams:[
+          {label:"Solenoid Field Lines",icon:"⊙",desc:"Cross-section of solenoid with current dots and crosses showing uniform parallel field lines inside and negligible field outside the solenoid."},
+          {label:"Hysteresis Loop",icon:"∞",desc:"B-H graph for ferromagnetic material showing saturation, retentivity (remanence) at H=0, and coercivity at B=0."}
+        ],
+        problems:[
+          {q:"Find B at the center of a circular coil of radius 5cm carrying 2A current.",a:"B = 25.1 μT"},
+          {q:"A solenoid has 500 turns per meter. Find B inside when carrying 3A.",a:"B = 1.885 mT"},
+          {q:"An electron moves at 10⁶ m/s perpendicular to B = 0.5T. Find magnetic force.",a:"F = 8 × 10⁻¹⁴ N"},
+          {q:"Two parallel wires 10cm apart carry 5A each in same direction. Find force per unit length.",a:"F/L = 5 × 10⁻⁵ N/m (attractive)"},
+          {q:"Distinguish between soft iron and steel for electromagnet core.",a:"Soft iron: high permeability, low retentivity — preferred for electromagnets"}
+        ]
+      },
+      {
+        id:"em-induction", title:"Electromagnetic Induction", icon:"⚙️",
+        sub:"Faraday's Law, Lenz's Law & Self/Mutual Inductance",
+        notes:[
+          {h:"1. Faraday's Law",
+           b:"Induced EMF equals negative rate of change of magnetic flux: <span class='formula'>ε = −N·dΦ/dt</span>. Magnetic flux: Φ = BA cos θ. Unit of flux: Weber (Wb). Unit of EMF: Volt (V)."},
+          {h:"2. Lenz's Law",
+           b:"The induced current always opposes the change in flux that caused it. This gives the negative sign in Faraday's law. Lenz's law is a consequence of conservation of energy."},
+          {h:"3. Self and Mutual Inductance",
+           b:"<strong>Self-inductance</strong>: <span class='formula'>L = NΦ/I</span>; EMF = −L(dI/dt). <strong>Mutual inductance</strong>: <span class='formula'>M = k√(L₁L₂)</span> where k is coupling coefficient (0 ≤ k ≤ 1). Unit: Henry (H)."},
+          {h:"4. AC Generator",
+           b:"Coil rotating in uniform B: <span class='formula'>ε = NBAω·sin(ωt) = ε₀·sin(ωt)</span>. Peak EMF: ε₀ = NBAω. RMS EMF: ε_rms = ε₀/√2."}
+        ],
+        diagrams:[
+          {label:"AC Generator Diagram",icon:"↻",desc:"Rotating rectangular coil ABCD in magnetic field B with slip rings, brushes and external circuit showing sinusoidal EMF output waveform."},
+          {label:"Transformer",icon:"⇆",desc:"Primary and secondary coils on laminated iron core with turns N₁ and N₂. Shows step-up/step-down voltage and inverse current transformation."}
+        ],
+        problems:[
+          {q:"A coil of 100 turns has flux changing from 0.02 Wb to 0.06 Wb in 0.2s. Find induced EMF.",a:"ε = 20 V"},
+          {q:"An AC generator has 200 turns, area 0.1 m², B = 0.5 T, ω = 100π rad/s. Find peak EMF.",a:"ε₀ = 3141.6 V ≈ 3.14 kV"},
+          {q:"A transformer has turns ratio 1:10. Input is 220V, 5A. Find secondary voltage and current.",a:"V₂ = 2200 V, I₂ = 0.5 A"},
+          {q:"Self-inductance of a coil is 2H. Current changes from 3A to 1A in 0.1s. Find induced EMF.",a:"ε = 40 V"},
+          {q:"What is the energy stored in a 5H inductor carrying 4A?",a:"U = 40 J"}
+        ]
+      },
+      {
+        id:"wave-optics", title:"Wave Optics", icon:"🔭",
+        sub:"Interference, Diffraction & Polarization",
+        notes:[
+          {h:"1. Huygen's Principle",
+           b:"Every point on a wavefront acts as a source of secondary wavelets spreading in all directions. The new wavefront is the envelope of all secondary wavelets. Explains reflection, refraction, interference, and diffraction."},
+          {h:"2. Young's Double Slit Experiment",
+           b:"Bright fringes: <span class='formula'>y_m = mλD/d</span>. Fringe width: <span class='formula'>β = λD/d</span>. Dark fringes at (2m+1)λ/2. D = screen distance, d = slit separation, λ = wavelength."},
+          {h:"3. Diffraction",
+           b:"Single slit: first minimum at <span class='formula'>a·sinθ = λ</span>. Rayleigh resolution limit: θ_min = 1.22λ/D. Diffraction grating: <span class='formula'>d·sinθ = mλ</span>."},
+          {h:"4. Polarization",
+           b:"Light is a transverse EM wave. Malus's Law: <span class='formula'>I = I₀·cos²θ</span>. Brewster's angle: <span class='formula'>tan(i_B) = n</span> (reflected ray is completely polarized)."}
+        ],
+        diagrams:[
+          {label:"Young's Double Slit Setup",icon:"〰",desc:"Light source → single slit S → double slits S₁S₂ separated by d → screen at distance D showing bright and dark fringes with fringe width β labeled."},
+          {label:"Polarization by Reflection",icon:"↕",desc:"Unpolarized light incident at Brewster's angle on glass surface; reflected ray is completely plane-polarized (only vertical vibrations)."}
+        ],
+        problems:[
+          {q:"In YDSE, λ=600nm, d=0.3mm, D=1.5m. Find fringe width.",a:"β = 3 mm"},
+          {q:"Light of wavelength 500nm falls on a single slit of width 0.5mm. Find angular position of first minimum.",a:"θ = 0.057° ≈ 1 mrad"},
+          {q:"Polarized light of intensity 100 W/m² passes through analyzer at 30° to polarizer. Find transmitted intensity.",a:"I = 75 W/m²"},
+          {q:"Refractive index of glass is 1.5. Find Brewster's angle.",a:"i_B = 56.3°"},
+          {q:"In YDSE the 5th bright fringe is at 1.5cm from center. Find fringe width.",a:"β = 3 mm"}
+        ]
+      }
+    ]
+  }
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────
+let curGrade = null, curChapter = null, sidebarCollapsed = false, detSidebarCollapsed = false;
+
+// ─── PARTICLES ────────────────────────────────────────────────────────────
+(function(){
+  const c = document.getElementById('canvas');
+  const ctx = c.getContext('2d');
+  let W,H,particles=[];
+  function init(){
+    W=c.width=innerWidth; H=c.height=innerHeight;
+    particles=Array.from({length:70},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,
+      r:Math.random()*1.4+.4,alpha:Math.random()*.5+.1,
+      hue:Math.random()>.5?195:50
+    }));
+  }
+  function draw(){
+    ctx.fillStyle='rgba(2,4,12,0.18)';ctx.fillRect(0,0,W,H);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`hsla(${p.hue},100%,70%,${p.alpha})`;ctx.fill();
+    });
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<110){
+          ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle=`rgba(0,180,255,${.1*(1-d/110)})`;ctx.lineWidth=.5;ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  init();draw();
+  window.addEventListener('resize',init);
+})();
+
+// ─── INTRO ────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(()=>{
+    document.getElementById('iname').classList.add('show');
+    document.getElementById('itag').classList.add('show');
+    document.getElementById('idots').classList.add('show');
+  },500);
+  setTimeout(()=>{
+    document.getElementById('intro').classList.add('hide');
+    document.getElementById('nav').style.display='flex';
+    document.getElementById('app').classList.add('visible');
+    buildHome();
+  },3200);
+});
+
+// ─── HOME ─────────────────────────────────────────────────────────────────
+function buildHome(){
+  [11,12].forEach(g=>{
+    const d=DATA[g];
+    const tags=document.getElementById('tags'+g);
+    tags.innerHTML=d.chapters.map(c=>`<span class="chapter-tag">${c.icon} ${c.title}</span>`).join('');
+    const total=d.chapters.reduce((s,c)=>s+c.problems.length,0);
+    document.getElementById('prb'+g).textContent=total+' problems';
+  });
+  const totCh=DATA[11].chapters.length+DATA[12].chapters.length;
+  const totPrb=Object.values(DATA).reduce((s,g)=>s+g.chapters.reduce((cs,c)=>cs+c.problems.length,0),0);
+  document.getElementById('s-chapters').textContent=totCh+'+';
+  document.getElementById('s-problems').textContent=totPrb+'+';
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('grade-hub').classList.remove('active');
+  document.getElementById('chapter-detail').classList.remove('active');
+  if(id==='home'){document.getElementById('home').classList.add('active');}
+  else if(id==='hub'){document.getElementById('grade-hub').classList.add('active');}
+  else if(id==='detail'){document.getElementById('chapter-detail').classList.add('active');}
+}
+
+function goHome(){
+  curGrade=null;curChapter=null;
+  showScreen('home');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+}
+
+function openGrade(g){
+  curGrade=g;
+  const d=DATA[g];
+  const isGold=g===12;
+
+  // Nav highlight
+  document.getElementById('nb11').classList.toggle('active',g===11);
+  document.getElementById('nb12').classList.toggle('active',g===12);
+
+  // Sidebar
+  document.getElementById('sb-grade-label').textContent=d.label;
+  document.getElementById('sb-grade-label').style.color=d.color;
+  const sbItems=document.getElementById('sb-items');
+  sbItems.innerHTML=d.chapters.map(c=>`
+    <button class="sidebar-item" onclick="openChapter('${c.id}')" id="si-${c.id}">${c.icon} ${c.title}</button>
+  `).join('');
+
+  // Chapter list
+  const backBtn=document.getElementById('hub-back-btn');
+  backBtn.className='hub-back'+(isGold?' gold':'');
+  document.getElementById('hub-title').textContent=d.label;
+  document.getElementById('hub-sub').textContent=d.tag;
+  document.getElementById('hub-sub').style.color=d.color;
+  document.getElementById('hub-hint').textContent=d.chapters.length+' chapters available. Click any chapter to begin.';
+
+  const grid=document.getElementById('chapters-grid');
+  grid.innerHTML=d.chapters.map((c,i)=>`
+    <div class="chapter-card${isGold?' gold':''}" onclick="openChapter('${c.id}')" style="animation-delay:${i*.07}s">
+      <div class="ch-icon">${c.icon}</div>
+      <div class="ch-title">${c.title}</div>
+      <div class="ch-sub">${c.sub}</div>
+      <div class="ch-badges">
+        <span class="ch-badge ${isGold?'gold':'blue'}">${c.notes.length} topics</span>
+        <span class="ch-badge dim">${c.problems.length} problems</span>
+      </div>
+    </div>
+  `).join('');
+
+  showScreen('hub');
+}
+
+function backToChapters(){
+  openGrade(curGrade);
+  curChapter=null;
+}
+
+function openChapter(id){
+  const d=DATA[curGrade];
+  const ch=d.chapters.find(c=>c.id===id);
+  if(!ch)return;
+  curChapter=ch;
+  const isGold=curGrade===12;
+
+  // Update sidebar active
+  document.querySelectorAll('.sidebar-item').forEach(b=>{
+    b.classList.remove('active','gold-active');
+    if(b.id==='si-'+id) b.classList.add(isGold?'gold-active':'active');
+  });
+
+  // Detail header
+  document.getElementById('det-icon').textContent=ch.icon;
+  document.getElementById('det-name').textContent=ch.title;
+  document.getElementById('det-sub').textContent=ch.sub;
+  document.getElementById('det-sub').style.color=d.color;
+  document.getElementById('det-back').className='detail-back'+(isGold?' gold':'');
+  if(isGold) document.getElementById('det-back').style.cssText='background:none;border:1px solid rgba(255,215,0,.5);color:var(--gold);padding:8px 20px;border-radius:8px;cursor:pointer;font-family:monospace;font-size:.82rem;letter-spacing:1px;margin-bottom:28px;transition:all .2s;';
+
+  // Build tab content
+  buildNotes(ch,isGold);
+  buildDiagrams(ch,isGold);
+  buildProblems(ch,isGold);
+
+  // Default to notes
+  switchTab('notes',document.querySelector('.tab'));
+
+  // Right scroll panel - "On This Page"
+  const rl=document.getElementById('right-links');
+  rl.innerHTML=['Notes','Diagrams','Problems'].map(t=>`
+    <button class="right-link${t==='Notes'?' active':''}" onclick="switchTabByName('${t.toLowerCase()}',this)">${t}</button>
+  `).join('');
+
+  // Right scroll panel - All Chapters
+  const rc=document.getElementById('right-chapters');
+  rc.innerHTML=d.chapters.map(c=>`
+    <button class="right-link${c.id===id?' active':''}" onclick="openChapter('${c.id}')" style="${c.id===id?(isGold?'color:var(--gold);border-left-color:var(--gold)':''):''}">
+      ${c.icon} ${c.title}
+    </button>
+  `).join('');
+
+  // Det sidebar
+  document.getElementById('det-sb-label').style.color=d.color;
+  const di=document.getElementById('det-sb-items');
+  di.innerHTML=d.chapters.map(c=>`
+    <button class="sidebar-item${c.id===id?(isGold?' gold-active':' active'):''}" onclick="openChapter('${c.id}')">${c.icon} ${c.title}</button>
+  `).join('');
+
+  showScreen('detail');
+}
+
+// ─── TAB SYSTEM ───────────────────────────────────────────────────────────
+function switchTab(name, btn){
+  ['notes','diagrams','problems'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display=t===name?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+
+  // Sync right panel
+  document.querySelectorAll('#right-links .right-link').forEach(b=>{
+    b.classList.toggle('active', b.textContent.trim().toLowerCase()===name);
+  });
+}
+
+function switchTabByName(name, btn){
+  switchTab(name, null);
+  document.querySelectorAll('.tab').forEach(b=>{
+    if(b.textContent.trim().toLowerCase()===name) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  document.querySelectorAll('#right-links .right-link').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+// ─── BUILD CONTENT ────────────────────────────────────────────────────────
+function buildNotes(ch, isGold){
+  const el=document.getElementById('tab-notes');
+  el.innerHTML=ch.notes.map(n=>`
+    <div class="note-card${isGold?' gold':''}">
+      <div class="note-heading">${n.h}</div>
+      <div class="note-body">${n.b}</div>
+    </div>
+  `).join('');
+}
+
+function buildDiagrams(ch, isGold){
+  const el=document.getElementById('tab-diagrams');
+  const accent=isGold?'var(--gold)':'var(--blue)';
+  const accentRgb=isGold?'255,215,0':'0,212,255';
+  el.innerHTML=`
+    <div class="diagram-note" style="${isGold?'background:rgba(255,215,0,.06);border-color:rgba(255,215,0,.2);color:var(--muted)':''}">
+      ℹ Visual aid descriptions for conceptual clarity. Upload actual diagram images via the admin panel.
+    </div>
+    ${ch.diagrams.map(d=>`
+      <div class="diagram-card">
+        <div class="diagram-icon" style="background:rgba(${accentRgb},.1);border-color:rgba(${accentRgb},.25)">${d.icon}</div>
+        <div>
+          <div class="diagram-label" style="color:${accent}">${d.label}</div>
+          <div class="diagram-desc">${d.desc}</div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function buildProblems(ch, isGold){
+  const el=document.getElementById('tab-problems');
+  el.innerHTML=ch.problems.map((p,i)=>`
+    <div class="problem-card${isGold?' gold':''}">
+      <div class="problem-inner">
+        <div class="problem-num${isGold?' gold':''}">Q${i+1}</div>
+        <div style="flex:1">
+          <p class="problem-q">${p.q}</p>
+          <button class="reveal-btn${isGold?' gold':''}" onclick="reveal(this,'${escQ(p.a)}',${isGold})">Reveal Answer</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escQ(s){return s.replace(/'/g,"&#39;").replace(/"/g,'&quot;')}
+
+function reveal(btn, ans, isGold){
+  btn.style.display='none';
+  const div=document.createElement('div');
+  div.className='answer'+(isGold?' gold':'');
+  div.textContent='✓ '+ans;
+  btn.parentNode.appendChild(div);
+}
+
+// ─── SIDEBAR TOGGLES ──────────────────────────────────────────────────────
+function toggleDetSidebar(){
+  const sb=document.getElementById('det-sidebar');
+  sb.classList.toggle('collapsed');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+buildHome();
+</script>
+</body>
+</html>
